@@ -538,7 +538,9 @@ def create_ui():
                 
                 # st.write("Processing your PPT...")
                 with st.spinner("Processing your PPT..."):
+                    print("before preprocess")
                     run_preprocess(ppt_save_path)
+                    print("after preprocess")
                 
                 # Load database and create retriever
                 st.session_state.db = FAISS.load_local(config.DB_NAME, embeddings, allow_dangerous_deserialization=True)
