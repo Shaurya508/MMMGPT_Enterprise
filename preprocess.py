@@ -36,7 +36,9 @@ def extract_text_from_image(shape, reader, slide_number, image_number):
             
             # Convert WMF to PNG using ImageMagick
             converted_image_path = image_path
-            convert_command = f"convert {temp_wmf_path} {converted_image_path}"
+            # convert_command = f"convert {temp_wmf_path} {converted_image_path}"
+            convert_command = f"convert '{temp_wmf_path}' '{converted_image_path}'"
+
             subprocess.run(convert_command, shell=True, check=True)
 
         else:
