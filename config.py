@@ -21,7 +21,5 @@ PPT_DIRECTORY = "uploaded_ppt"
 ENV_VARS = {
     "GRPC_VERBOSITY": "ERROR",
     "GRPC_TRACE": "",
-    "TF_CPP_MIN_LOG_LEVEL": "3",
-    "HF_HOME": "F:/D Drive Backup/HuggingFaceModelsCache",
-    "OLLAMA_MODELS": "F:/D Drive Backup/OllamaModels"
+    "TF_CPP_MIN_LOG_LEVEL": "3"
 }
