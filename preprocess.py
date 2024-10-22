@@ -12,7 +12,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
 import config
 from PIL import UnidentifiedImageError
-
+import subprocess
 
 # Set environment variables
 for key, value in config.ENV_VARS.items():
