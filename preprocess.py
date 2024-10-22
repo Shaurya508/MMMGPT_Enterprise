@@ -38,13 +38,14 @@ def extract_text_from_image(shape, reader, slide_number, image_number):
             converted_image_path = image_path
             # convert_command = f"convert {temp_wmf_path} {converted_image_path}"
             # convert_command = f"convert '{temp_wmf_path}' '{converted_image_path}'"
-            convert_command = f"inkscape '{temp_wmf_path}' --export-type=png --export-filename='{converted_image_path}'"
+            # convert_command = f"inkscape '{temp_wmf_path}' --export-type=png --export-filename='{converted_image_path}'"
 
-            subprocess.run(convert_command, shell=True, check=True)
+            # subprocess.run(convert_command, shell=True, check=True)
 
         else:
+            pass
             # Save image directly as PNG
-            img.save(image_path)
+            # img.save(image_path)
         
         # Proceed with OCR processing
         img_np = np.array(img.convert('L'))
