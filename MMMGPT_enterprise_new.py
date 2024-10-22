@@ -539,7 +539,8 @@ def create_ui():
                 # st.write("Processing your PPT...")
                 with st.spinner("Processing your PPT..."):
                     print("before preprocess")
-                    run_preprocess(ppt_save_path)
+                    # run_preprocess(ppt_save_path)
+                    time(10)
                     print("after preprocess")
                 
                 # Load database and create retriever
