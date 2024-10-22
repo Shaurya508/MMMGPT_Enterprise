@@ -20,40 +20,63 @@ for key, value in config.ENV_VARS.items():
 
 def extract_text_from_image(shape, reader, slide_number, image_number):
     """Extract text from images in PPT slides"""
-    image_bytes = shape.image.blob
-    image_stream = io.BytesIO(image_bytes)
-    img = Image.open(image_stream)
-    image_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
-    img.save(image_path)
-    img_np = np.array(img.convert('L'))
+    try:
+        image_bytes = shape.image.blob
+        image_stream = io.BytesIO(image_bytes)
+        img = Image.open(image_stream)
 
-    result = reader.readtext(img_np, detail=1)
-    rows = []
-    current_row = []
-    previous_y = None
-    tolerance = 15
+        image_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}image{image_number}.png")
+        
+        # Check if image is in WMF format and handle accordingly
+        if img.format == 'WMF':
+            # Save the WMF image temporarily
+            temp_wmf_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}image{image_number}.wmf")
+            with open(temp_wmf_path, "wb") as f:
+                f.write(image_bytes)
+            
+            # Convert WMF to PNG using ImageMagick
+            converted_image_path = image_path
+            convert_command = f"convert {temp_wmf_path} {converted_image_path}"
+            subprocess.run(convert_command, shell=True, check=True)
 
-    for entry in result:
-        bbox, text, confidence = entry
-        x_min, y_min = bbox[0]
-
-        if previous_y is None or abs(y_min - previous_y) <= tolerance:
-            current_row.append(text)
         else:
+            # Save image directly as PNG
+            img.save(image_path)
+        
+        # Proceed with OCR processing
+        img_np = np.array(img.convert('L'))
+        result = reader.readtext(img_np, detail=1)
+
+        rows = []
+        current_row = []
+        previous_y = None
+        tolerance = 15
+
+        for entry in result:
+            bbox, text, confidence = entry
+            x_min, y_min = bbox[0]
+
+            if previous_y is None or abs(y_min - previous_y) <= tolerance:
+                current_row.append(text)
+            else:
+                rows.append(current_row)
+                current_row = [text]
+            previous_y = y_min
+
+        if current_row:
             rows.append(current_row)
-            current_row = [text]
-        previous_y = y_min
 
-    if current_row:
-        rows.append(current_row)
+        table_str = ""
+        for row in rows:
+            table_str += '\t'.join(row) + '\n'
 
-    table_str = ""
-    for row in rows:
-        table_str += '\t'.join(row) + '\n'
-
-    image_opening_flag = f"<|S{slide_number}I{image_number}|>"
-    image_closing_flag = f"</|S{slide_number}I{image_number}|>"
-    return f"{image_opening_flag}\n{table_str}\n{image_closing_flag}"
+        image_opening_flag = f"<|S{slide_number}I{image_number}|>"
+        image_closing_flag = f"</|S{slide_number}I{image_number}|>"
+        return f"{image_opening_flag}\n{table_str}\n{image_closing_flag}"
+    
+    except UnidentifiedImageError:
+        print(f"Skipping unsupported image format on slide {slide_number}, image {image_number}.")
+        return ""
 
 def extract_title(shape, slide_number, chart_count):
     """Extract chart title and save chart image from the slide"""
