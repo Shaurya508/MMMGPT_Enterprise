@@ -26,26 +26,25 @@ def extract_text_from_image(shape, reader, slide_number, image_number):
         img = Image.open(image_stream)
 
         image_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}image{image_number}.png")
-        
-        # Check if image is in WMF format and handle accordingly
-        if img.format == 'WMF':
-            # Save the WMF image temporarily
-            temp_wmf_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}image{image_number}.wmf")
-            with open(temp_wmf_path, "wb") as f:
-                f.write(image_bytes)
+        # Save image directly as PNG
+        img.save(image_path)
+        # # Check if image is in WMF format and handle accordingly
+        # if img.format == 'WMF':
+        #     # Save the WMF image temporarily
+        #     temp_wmf_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}image{image_number}.wmf")
+        #     with open(temp_wmf_path, "wb") as f:
+        #         f.write(image_bytes)
             
-            # Convert WMF to PNG using ImageMagick
-            converted_image_path = image_path
-            # convert_command = f"convert {temp_wmf_path} {converted_image_path}"
-            # convert_command = f"convert '{temp_wmf_path}' '{converted_image_path}'"
-            # convert_command = f"inkscape '{temp_wmf_path}' --export-type=png --export-filename='{converted_image_path}'"
+        #     # Convert WMF to PNG using ImageMagick
+        #     converted_image_path = image_path
+        #     # convert_command = f"convert {temp_wmf_path} {converted_image_path}"
+        #     # convert_command = f"convert '{temp_wmf_path}' '{converted_image_path}'"
+        #     # convert_command = f"inkscape '{temp_wmf_path}' --export-type=png --export-filename='{converted_image_path}'"
 
-            # subprocess.run(convert_command, shell=True, check=True)
+        #     # subprocess.run(convert_command, shell=True, check=True)
 
-        else:
-            pass
-            # Save image directly as PNG
-            # img.save(image_path)
+        # else:
+        #     # pass
         
         # Proceed with OCR processing
         img_np = np.array(img.convert('L'))
