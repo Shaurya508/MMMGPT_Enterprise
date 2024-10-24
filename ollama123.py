@@ -232,6 +232,39 @@ def user_input(user_question):
     # response  = conversation_chain({"question": user_question})
     # return(response.get("answer"))
 
+
+
+# Define the path for the permanent cache file
+PERMANENT_CACHE_FILE = "Cache_MMMGPT_Domains.json"
+
+# Load the permanent cache from the file if it exists
+def load_permanent_cache():
+    if os.path.exists(PERMANENT_CACHE_FILE):
+        with open(PERMANENT_CACHE_FILE, "r") as file:
+            return json.load(file)
+    return {}
+
+# Save the permanent cache to the file
+def save_permanent_cache(cache):
+    with open(PERMANENT_CACHE_FILE, "w") as file:
+        json.dump(cache, file)
+
+# Initialize the permanent cache
+permanent_cache = load_permanent_cache()
+
+def save_permanent_answer(question, answer):
+    permanent_cache[question] = answer
+    save_permanent_cache(permanent_cache)
+
+def delete_permanent_cache_item(question):
+    if question in permanent_cache:
+        del permanent_cache[question]
+        save_permanent_cache(permanent_cache)
+        print(f"Deleted question '{question}' from the permanent cache.")
+    else:
+        print(f"Question '{question}' not found in the permanent cache.")
+
+
 def user_input1(user_question):
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
     embeddings = OllamaEmbeddings(model="zxf945/nomic-embed-text:latest")
@@ -250,7 +283,7 @@ def user_input1(user_question):
     permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
 
     if user_question_cleaned in permanent_cache_cleaned:
-        time.sleep(5)
+        time.sleep(3)
         # suggested_questions = questions_db.similarity_search(query=user_question, k = 5)
         return permanent_cache_cleaned[user_question_cleaned], None, None ,None
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -296,7 +329,7 @@ def user_input2(user_question):
     permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
 
     if user_question_cleaned in permanent_cache_cleaned:
-        time.sleep(5)
+        time.sleep(3)
         # suggested_questions = questions_db.similarity_search(query=user_question, k = 5)
         return permanent_cache_cleaned[user_question_cleaned], None, None ,None
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -342,7 +375,7 @@ def user_input3(user_question):
     permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
 
     if user_question_cleaned in permanent_cache_cleaned:
-        time.sleep(5)
+        time.sleep(3)
         # suggested_questions = questions_db.similarity_search(query=user_question, k = 5)
         return permanent_cache_cleaned[user_question_cleaned], None, None ,None
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -371,36 +404,6 @@ def user_input3(user_question):
     return response , docs1, None , None
 
 
-# Define the path for the permanent cache file
-PERMANENT_CACHE_FILE = "Cache_MMMGPT_mini.json"
-
-# Load the permanent cache from the file if it exists
-def load_permanent_cache():
-    if os.path.exists(PERMANENT_CACHE_FILE):
-        with open(PERMANENT_CACHE_FILE, "r") as file:
-            return json.load(file)
-    return {}
-
-# Save the permanent cache to the file
-def save_permanent_cache(cache):
-    with open(PERMANENT_CACHE_FILE, "w") as file:
-        json.dump(cache, file)
-
-# Initialize the permanent cache
-permanent_cache = load_permanent_cache()
-
-def save_permanent_answer(question, answer):
-    permanent_cache[question] = answer
-    save_permanent_cache(permanent_cache)
-
-def delete_permanent_cache_item(question):
-    if question in permanent_cache:
-        del permanent_cache[question]
-        save_permanent_cache(permanent_cache)
-        print(f"Deleted question '{question}' from the permanent cache.")
-    else:
-        print(f"Question '{question}' not found in the permanent cache.")
-
 
 def user_input4(user_question):
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -420,7 +423,7 @@ def user_input4(user_question):
     permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
 
     if user_question_cleaned in permanent_cache_cleaned:
-        time.sleep(5)
+        time.sleep(3)
         # suggested_questions = questions_db.similarity_search(query=user_question, k = 5)
         return permanent_cache_cleaned[user_question_cleaned], None, None ,None
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -466,7 +469,7 @@ def user_input5(user_question):
     permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
 
     if user_question_cleaned in permanent_cache_cleaned:
-        time.sleep(5)
+        time.sleep(3)
         # suggested_questions = questions_db.similarity_search(query=user_question, k = 5)
         return permanent_cache_cleaned[user_question_cleaned], None, None ,None
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -512,7 +515,7 @@ def user_input6(user_question):
     permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
 
     if user_question_cleaned in permanent_cache_cleaned:
-        time.sleep(5)
+        time.sleep(3)
         # suggested_questions = questions_db.similarity_search(query=user_question, k = 5)
         return permanent_cache_cleaned[user_question_cleaned], None, None ,None
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
@@ -558,7 +561,7 @@ def user_input7(user_question):
     permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
 
     if user_question_cleaned in permanent_cache_cleaned:
-        time.sleep(5)
+        time.sleep(3)
         # suggested_questions = questions_db.similarity_search(query=user_question, k = 5)
         return permanent_cache_cleaned[user_question_cleaned], None, None ,None
     # embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
