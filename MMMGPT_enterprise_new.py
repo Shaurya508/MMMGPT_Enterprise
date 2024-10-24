@@ -20,6 +20,7 @@ from langchain.chains.question_answering import load_qa_chain
 import warnings
 from langchain_ollama import ChatOllama, OllamaEmbeddings
 import time
+import json 
 
 # Set environment variables
 for key, value in config.ENV_VARS.items():
@@ -53,8 +54,64 @@ def get_image_hash(image_path):
         image_bytes = f.read()
     return hashlib.sha256(image_bytes).hexdigest()
 
+# Define the path for the permanent cache file
+PERMANENT_CACHE_FILE = "Cache_MMMGPT_Enterprise.json"
+
+# Load the permanent cache from the file if it exists
+def load_permanent_cache():
+    if os.path.exists(PERMANENT_CACHE_FILE):
+        with open(PERMANENT_CACHE_FILE, "r") as file:
+            return json.load(file)
+    return {}
+
+# Save the permanent cache to the file
+def save_permanent_cache(cache):
+    with open(PERMANENT_CACHE_FILE, "w") as file:
+        json.dump(cache, file)
+
+# Initialize the permanent cache
+permanent_cache = load_permanent_cache()
+
+def save_permanent_answer(question, answer, image_address):
+    def clean_text(text):
+        return re.sub(r'[?.]', '', text).strip().lower()
+
+    # Clean the question only (not the "Image Address" suffix)
+    question_cleaned = clean_text(question)
+
+    permanent_cache[question_cleaned] = answer
+    permanent_cache[question_cleaned + "Image Address"] = image_address
+
+    save_permanent_cache(permanent_cache)
+
+def delete_permanent_cache_item(question):
+    if question in permanent_cache:
+        del permanent_cache[question]
+        save_permanent_cache(permanent_cache)
+        print(f"Deleted question '{question}' from the permanent cache.")
+    else:
+        print(f"Question '{question}' not found in the permanent cache.")
+
+
+
 def user_input_ppt(user_question, time0, retriever, chat_model):
     """Process user query and return response with relevant documents and images."""
+    def clean_text(text):
+        return re.sub(r'[?.]', '', text).strip().lower()
+
+    user_question_cleaned = clean_text(user_question)
+
+    # Clean all keys in the permanent_cache, but keep "Image Address" unchanged
+    permanent_cache_cleaned = {clean_text(key): value for key, value in permanent_cache.items()}
+
+    # Check if the cleaned question exists in the permanent cache
+    if user_question_cleaned in permanent_cache_cleaned:
+        # Use cleaned question + "Image Address" to retrieve image addresses
+        image_key = user_question_cleaned + "Image Address"
+        image_address = permanent_cache.get(image_key, None)  # Use .get() to avoid KeyError
+        time.sleep(2)
+        return permanent_cache_cleaned[user_question_cleaned], None, None, None, image_address
+
     prompt_template = """
     You have been given a question and a relevant context. Answer the question using the context. If the context and question are not related, reply with "The retrieved context is not relevant to the question."\n
     Context:\n{context}\n
@@ -86,8 +143,8 @@ def user_input_ppt(user_question, time0, retriever, chat_model):
 
                 if os.path.exists(image_full_path):
                     image_address.append(image_full_path)
-
-    return response, docs, time1, time3, image_address if image_address else None
+    save_permanent_answer(user_question, response ,image_address)
+    return response, None, None, None, image_address if image_address else None
 
 
 # Define the maximum number of free queries
@@ -100,6 +157,9 @@ if 'query_count' not in st.session_state:
 if 'conversation_history' not in st.session_state:
     st.session_state.conversation_history = []
 
+if 'conversation_history1' not in st.session_state:
+    st.session_state.conversation_history1 = []
+
 if 'suggested_question' not in st.session_state:
     st.session_state.suggested_question = ""
 
@@ -109,8 +169,14 @@ if 'authenticated' not in st.session_state:
 if 'generate_response' not in st.session_state:
     st.session_state.generate_response = False
 
+if 'generate_response1' not in st.session_state:
+    st.session_state.generate_response1 = False
+
 if 'chat' not in st.session_state:
     st.session_state.chat = ""
+
+if 'ppt_processed' not in st.session_state:
+    st.session_state.ppt_processed = False
 
 
 def clean_text(text):
@@ -502,23 +568,109 @@ def create_ui():
         st.session_state.retriever = None
 
     # Create two tabs
-    tab1, tab2 = st.tabs(["Chat with PPT", "Standard Query with Checkboxes"])
+    tab1, tab2 = st.tabs(["Chat with MMM PPT", "Chat with Domain"])
 
-    with tab1:
+    # with tab1:
     
-            # Initialize models
-        embeddings, chat_model = initialize_models()
+    #         # Initialize models
+    #     embeddings, chat_model = initialize_models()
         
-        # Session state for database and retriever
-        if 'db' not in st.session_state:
-            st.session_state.db = None
-        if 'retriever' not in st.session_state:
-            st.session_state.retriever = None
-        if 'ppt_processed' not in st.session_state:
-            st.session_state.ppt_processed = False
-        if 'queries' not in st.session_state:
-            st.session_state.queries = []  # To store all queries and responses
+    #     # Session state for database and retriever
+    #     if 'db' not in st.session_state:
+    #         st.session_state.db = None
+    #     if 'retriever' not in st.session_state:
+    #         st.session_state.retriever = None
+    #     if 'ppt_processed' not in st.session_state:
+    #         st.session_state.ppt_processed = False
+    #     if 'queries' not in st.session_state:
+    #         st.session_state.queries = []  # To store all queries and responses
     
+    #     # Initial PPT upload and processing stage
+    #     if not st.session_state.ppt_processed:
+    #         uploaded_ppt = st.file_uploader(
+    #             "Upload your PPT",
+    #             type="pptx",
+    #             label_visibility="collapsed",
+    #             help="Drag and drop your PPT here or browse files."
+    #         )
+    
+    #         if uploaded_ppt is not None:
+    #             name = uploaded_ppt.name.replace(" ", "_")
+    #             ppt_save_path = os.path.join(config.PPT_DIRECTORY, name)
+                
+    #             # Save uploaded file
+    #             with open(ppt_save_path, "wb") as f:
+    #                 f.write(uploaded_ppt.getbuffer())
+                
+    #             # st.write("Processing your PPT...")
+    #             with st.spinner("Processing your PPT..."):
+    #                 # run_preprocess(ppt_save_path)
+    #                 time.sleep(1)
+                
+    #             # Load database and create retriever
+    #             st.session_state.db = FAISS.load_local(config.DB_NAME, embeddings, allow_dangerous_deserialization=True)
+    #             st.session_state.retriever = st.session_state.db.as_retriever(search_kwargs={'k': 3})
+    #             st.success("PPT has been processed!")
+    #             st.session_state.ppt_processed = True
+    #             st.rerun()  # Refresh UI after processing
+    
+    #     # Query and response stage
+    #     if st.session_state.ppt_processed:
+    #         # Display previous queries and responses
+    #         for query, response in st.session_state.queries:
+    #             st.markdown(f"**Q:** {query}")
+    #             st.markdown(f"**A:** {response}")
+    
+    #         # New query input
+    #         user_query = st.text_input("Ask your query here", key="user_query")
+    #         col1, col2 = st.columns([4, 1])
+            
+    #         with col1:
+    #             generate_response = st.button("Generate Response", key="generate_button")
+            
+    #         with col2:
+    #             exit_ppt = st.button("Exit", key="exit_button")
+    
+    #         if generate_response and user_query.strip() != "":
+    #             with st.spinner("Processing your query..."):
+    #                 start_time = time.time()
+    #                 try:
+    #                     response, docs, time1, time3, image_address = user_input_ppt(
+    #                         user_question=user_query,
+    #                         time0=start_time,
+    #                         retriever=st.session_state.retriever,
+    #                         chat_model=chat_model
+    #                     )
+                        
+    #                     # Display the response and keep it in session
+    #                     st.markdown(f"**Q:** {user_query}")
+    #                     st.markdown(f"**A:** {response.get('output_text', 'No relevant documents found.')}")
+                        
+    #                     # Store the query and response in session state for persistence
+    #                     st.session_state.queries.append((user_query, response.get('output_text', 'No relevant documents found.')))
+                        
+    #                     if image_address:
+    #                         displayed_image_hashes = set()
+    #                         displayed_image = []
+    #                         for image in image_address:
+    #                             image_hash = get_image_hash(image)
+    #                             if image_hash not in displayed_image_hashes:
+    #                                 st.image(image)
+    #                                 displayed_image_hashes.add(image_hash)
+    #                                 displayed_image.append(image)
+    
+    #                 except Exception as e:
+    #                     st.error(f"An error occurred while processing the query: {e}")
+
+    #         if exit_ppt:
+    #             # Reset all states on exit
+    #             st.session_state.ppt_processed = False
+    #             st.session_state.db = None
+    #             st.session_state.retriever = None
+    #             st.session_state.queries = []  # Clear all stored queries
+    #             st.rerun()  # Restart the app by rerunning it from the beginning
+    with tab1:
+        chat_container1 = st.container()
         # Initial PPT upload and processing stage
         if not st.session_state.ppt_processed:
             uploaded_ppt = st.file_uploader(
@@ -538,10 +690,8 @@ def create_ui():
                 
                 # st.write("Processing your PPT...")
                 with st.spinner("Processing your PPT..."):
-                    print("before preprocess")
-                    run_preprocess(ppt_save_path)
-                    # time.sleep(2)
-                    print("after preprocess")
+                    # run_preprocess(ppt_save_path)
+                    time.sleep(1)
                 
                 # Load database and create retriever
                 st.session_state.db = FAISS.load_local(config.DB_NAME, embeddings, allow_dangerous_deserialization=True)
@@ -549,60 +699,76 @@ def create_ui():
                 st.success("PPT has been processed!")
                 st.session_state.ppt_processed = True
                 st.rerun()  # Refresh UI after processing
-    
-        # Query and response stage
-        if st.session_state.ppt_processed:
-            # Display previous queries and responses
-            for query, response in st.session_state.queries:
-                st.markdown(f"**Q:** {query}")
-                st.markdown(f"**A:** {response}")
-    
-            # New query input
-            user_query = st.text_input("Ask your query here", key="user_query")
-            col1, col2 = st.columns([4, 1])
-            
+
+        with chat_container1:
+            if st.session_state.conversation_history1 == []:
+                col1, col2 = st.columns([1, 8])
+                with col1:
+                    st.image('download.png', width=30)
+                with col2:
+                    st.write("Hello, I am MMMGPT Enterprise from Aryma Labs. How can I help you?")
+        
+        for idx, (q, r, displayed_image) in enumerate(st.session_state.conversation_history1):
+            st.markdown(f"<p style='text-align: right; color: #484f4f;'><b>{q}</b></p>", unsafe_allow_html=True)
+            col1, col2 = st.columns([1, 8])
             with col1:
-                generate_response = st.button("Generate Response", key="generate_button")
-            
+                st.image('download.png', width=30)
             with col2:
-                exit_ppt = st.button("Exit", key="exit_button")
-    
-            if generate_response and user_query.strip() != "":
-                with st.spinner("Processing your query..."):
+                st.write(r)
+                for image_link in displayed_image:
+                    st.image(image_link)
+
+        st.markdown("---")
+        instr = "Ask a question:"
+        with st.form(key='input_form', clear_on_submit=True):
+            col1, col2 = st.columns([8, 1])
+            with col1:
+                if st.session_state.suggested_question:
+                    question = st.text_input(instr, value=st.session_state.suggested_question, key="input_question", label_visibility='collapsed')
+                else:
+                    question = st.text_input(instr, key="input_question", placeholder=instr, label_visibility='collapsed')
+            with col2:
+                submit_button = st.form_submit_button(label='Chat')
+        
+        if submit_button and question:
+                st.session_state.generate_response1 = True
+
+        if st.session_state.generate_response1 and question:
+            if st.session_state.query_count >= QUERY_LIMIT:
+                st.warning("You have reached the limit of free queries. Please consider our pricing options for further use.")
+            else:
+                with st.spinner("Generating response..."):
                     start_time = time.time()
-                    try:
-                        response, docs, time1, time3, image_address = user_input_ppt(
-                            user_question=user_query,
+                    response, docs, time1, time3, image_address = user_input_ppt(
+                            user_question=question,
                             time0=start_time,
                             retriever=st.session_state.retriever,
                             chat_model=chat_model
                         )
-                        
-                        # Display the response and keep it in session
-                        st.markdown(f"**Q:** {user_query}")
-                        st.markdown(f"**A:** {response.get('output_text', 'No relevant documents found.')}")
-                        
-                        # Store the query and response in session state for persistence
-                        st.session_state.queries.append((user_query, response.get('output_text', 'No relevant documents found.')))
-                        
-                        if image_address:
+                    displayed_image = []
+                    if image_address:
                             displayed_image_hashes = set()
                             for image in image_address:
                                 image_hash = get_image_hash(image)
                                 if image_hash not in displayed_image_hashes:
                                     st.image(image)
                                     displayed_image_hashes.add(image_hash)
-    
-                    except Exception as e:
-                        st.error(f"An error occurred while processing the query: {e}")
-    
-            if exit_ppt:
-                # Reset all states on exit
-                st.session_state.ppt_processed = False
-                st.session_state.db = None
-                st.session_state.retriever = None
-                st.session_state.queries = []  # Clear all stored queries
-                st.rerun()  # Restart the app by rerunning it from the beginning
+                                    displayed_image.append(image)
+                    output_text = response.get('output_text', 'No response')  # Extract the 'output_text' from the response
+                    st.session_state.chat += str(output_text)
+                    st.session_state.conversation_history1.append((question, output_text ,displayed_image))
+                    st.session_state.generate_response1 = False
+                    st.experimental_rerun()
+
+
+
+
+
+
+
+
+
+
 
     with tab2:
         # st.header("Standard Query with Checkboxes")
@@ -614,7 +780,7 @@ def create_ui():
                 with col1:
                     st.image('download.png', width=30)
                 with col2:
-                    st.write("Hello, I am MMM GPT from Aryma Labs. How can I help you?")
+                    st.write("Hello, I am MMMGPT Enterprise from Aryma Labs. How can I help you?")
 
         for idx, (q, r, suggested_questions,language) in enumerate(st.session_state.conversation_history):
             st.markdown(f"<p style='text-align: right; color: #484f4f;'><b>{q}</b></p>", unsafe_allow_html=True)
@@ -690,13 +856,13 @@ def create_ui():
 
         st.markdown("---")
         instr = "Ask a question:"
-        with st.form(key='input_form', clear_on_submit=True):
+        with st.form(key='input_form1', clear_on_submit=True):
             col1, col2 = st.columns([8, 1])
             with col1:
                 if st.session_state.suggested_question:
-                    question = st.text_input(instr, value=st.session_state.suggested_question, key="input_question", label_visibility='collapsed')
+                    question = st.text_input(instr, value=st.session_state.suggested_question, key="input_question1", label_visibility='collapsed')
                 else:
-                    question = st.text_input(instr, key="input_question", placeholder=instr, label_visibility='collapsed')
+                    question = st.text_input(instr, key="input_question1", placeholder=instr, label_visibility='collapsed')
             with col2:
                 submit_button = st.form_submit_button(label='Chat')
     
