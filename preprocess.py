@@ -10,117 +10,348 @@ import easyocr
 from langchain_community.vectorstores import FAISS
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_ollama import OllamaEmbeddings
-import config
-from PIL import UnidentifiedImageError
-import subprocess
+import json 
+from typing import Iterator
+from langchain_core.document_loaders import BaseLoader
+from langchain_core.documents import Document as LCDocument
+from docling.document_converter import DocumentConverter
+# import google.generativeai as genai
+from paddleocr import PaddleOCR
 
-# Set environment variables
-for key, value in config.ENV_VARS.items():
+with open('config.json', 'r') as f:
+    config = json.load(f)
+
+# Set environment variables from config file
+for key, value in config["ENV_VARS"].items():
     os.environ[key] = value
 
-def extract_text_from_image(shape, reader, slide_number, image_number):
-    """Extract text from images in PPT slides"""
-    image_bytes = shape.image.blob
-    image_stream = io.BytesIO(image_bytes)
-    img = Image.open(image_stream)
+# Use config for embedding model and chat model
+EMBEDDING_MODEL = config["EMBEDDING_MODEL"]
+CHAT_MODEL = config["CHAT_MODEL"]
 
-    image_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
-    # Save image directly as PNG
-    img.save(image_path)
-    # # Check if image is in WMF format and handle accordingly
-    # if img.format == 'WMF':
-    #     # Save the WMF image temporarily
-    #     temp_wmf_path = os.path.join(config.EXTRACTED_IMG_DIR, f"slide_{slide_number}image{image_number}.wmf")
-    #     with open(temp_wmf_path, "wb") as f:
-    #         f.write(image_bytes)
-        
-    #     # Convert WMF to PNG using ImageMagick
-    #     converted_image_path = image_path
-    #     # convert_command = f"convert {temp_wmf_path} {converted_image_path}"
-    #     # convert_command = f"convert '{temp_wmf_path}' '{converted_image_path}'"
-    #     # convert_command = f"inkscape '{temp_wmf_path}' --export-type=png --export-filename='{converted_image_path}'"
+CHUNK_SIZE = config["CHUNK_SIZE"]
+CHUNK_OVERLAP = config["CHUNK_OVERLAP"]
+DB_NAME = config["DB_NAME"]
 
-    #     # subprocess.run(convert_command, shell=True, check=True)
 
-    # else:
-    #     # pass
+
+# def extract_text_from_image(shape, reader, slide_number, image_number):
+#     """Extract text from images in PPT slides"""
+#     image_bytes = shape.image.blob
+#     image_stream = io.BytesIO(image_bytes)
+#     img = Image.open(image_stream)
+
+#     image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
+#     img.save(image_path)
+#     img_np = np.array(img.convert('L'))
+#     result = reader.readtext(img_np, detail=1)
+
+#     rows = []
+#     current_row = []
+#     previous_y = None
+#     tolerance = 15
+
+#     for entry in result:
+#         bbox, text, confidence = entry
+#         x_min, y_min = bbox[0]
+
+#         if previous_y is None or abs(y_min - previous_y) <= tolerance:
+#             current_row.append(text)
+#         else:
+#             rows.append(current_row)
+#             current_row = [text]
+#         previous_y = y_min
+
+#     if current_row:
+#         rows.append(current_row)
+
+#     table_str = ""
+#     for row in rows:
+#         table_str += '\t'.join(row) + '\n'
+
+#     image_opening_flag = f"<|S{slide_number}I{image_number}|>"
+#     image_closing_flag = f"</|S{slide_number}I{image_number}|>"
+#     return f"{image_opening_flag}\n{table_str}\n{image_closing_flag}"
+
+# def extract_text_from_image(shape, model, slide_number, image_number):
+#     """
+#     Extract text from images in PPT slides using a generative model.
+
+#     Args:
+#         shape: The shape object containing the image in the PPT.
+#         model: The generative model to process the image.
+#         slide_number: The slide number of the image.
+#         image_number: The image number on the slide.
+
+#     Returns:
+#         A formatted string with extracted text wrapped in flags.
+#     """
+#     genai.configure(api_key='AIzaSyDO6Dgc7W_6IJ6SL3ciAWZi7H7b2DXIQxA')
+#     model = genai.GenerativeModel("gemini-1.5-flash")
+
+#     # Extract image bytes and save the image
+#     image_bytes = shape.image.blob
+#     image_stream = io.BytesIO(image_bytes)
+#     img = Image.open(image_stream)
+
+#     # Save the image locally
+#     image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
+#     img.save(image_path)
+
+#     # Use generative model to extract text from the image
+#     organ = Image.open(image_path)
+#     response = model.generate_content(["Give the data in the image", organ])
+
+#     # Extract the text from the response
+#     extracted_text = response.text.strip()
+
+#     # Add flags around the extracted text
+#     image_opening_flag = f"<|S{slide_number}I{image_number}|>"
+#     image_closing_flag = f"</|S{slide_number}I{image_number}|>"
+
+#     return f"{image_opening_flag}\n{extracted_text}\n{image_closing_flag}"
+
+# def ocr_with_paddle(img):
+#     finaltext = ''
+#     ocr = PaddleOCR(lang='en', use_angle_cls=True)
+#     # img_path = 'exp.jpeg'
+#     result = ocr.ocr(img)
     
-    # Proceed with OCR processing
-    img_np = np.array(img.convert('L'))
-    result = reader.readtext(img_np, detail=1)
+#     for i in range(len(result[0])):
+#         text = result[0][i][1][0]
+#         finaltext += ' '+ text
+#     return finaltext
 
-    rows = []
-    current_row = []
-    previous_y = None
-    tolerance = 15
 
-    for entry in result:
-        bbox, text, confidence = entry
-        x_min, y_min = bbox[0]
+# PaddleOCR-based function
+from paddleocr import PaddleOCR
+from PIL import Image
 
-        if previous_y is None or abs(y_min - previous_y) <= tolerance:
-            current_row.append(text)
-        else:
-            rows.append(current_row)
-            current_row = [text]
-        previous_y = y_min
+from pptx import Presentation
+from paddleocr import PaddleOCR
+from PIL import Image
+import io
+import os
 
-    if current_row:
-        rows.append(current_row)
+# Directory to save extracted images
+EXTRACTED_IMG_DIR = "extracted_images"
+os.makedirs(EXTRACTED_IMG_DIR, exist_ok=True)
 
-    table_str = ""
-    for row in rows:
-        table_str += '\t'.join(row) + '\n'
+def ocr_with_paddle(image_path):
+    """
+    Extract text from an image using PaddleOCR.
 
-    image_opening_flag = f"<|S{slide_number}I{image_number}|>"
-    image_closing_flag = f"</|S{slide_number}I{image_number}|>"
-    return f"{image_opening_flag}\n{table_str}\n{image_closing_flag}"
+    Args:
+        image_path (str): Path to the image file.
+
+    Returns:
+        str: Extracted text from the image.
+    """
+    # Initialize PaddleOCR
+    ocr = PaddleOCR(lang='en', use_angle_cls=True)
+
+    # Perform OCR on the image
+    result = ocr.ocr(image_path)
+
+    # Extract the text from the OCR result
+    extracted_text = ''
+    for line in result[0]:
+        extracted_text += ' ' + line[1][0]
+
+    return extracted_text.strip()
+
+
+def extract_text_from_image(shape, slide_number, image_number):
+    """
+    Extract text from images in PPT slides using PaddleOCR.
+
+    Args:
+        shape: The shape object containing the image in the PPT.
+        slide_number: The slide number of the image.
+        image_number: The image number on the slide.
+
+    Returns:
+        A formatted string with extracted text wrapped in flags.
+    """
+    try:
+        # Extract image bytes and convert to PIL Image
+        image_bytes = shape.image.blob
+        image_stream = io.BytesIO(image_bytes)
+        img = Image.open(image_stream)
+
+        # Save the image locally
+        image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
+        img.save(image_path)
+
+        # Use PaddleOCR to extract text from the image
+        extracted_text = ocr_with_paddle(image_path)
+
+        # Add flags around the extracted text
+        image_opening_flag = f"<|S{slide_number}I{image_number}|>"
+        image_closing_flag = f"</|S{slide_number}I{image_number}|>"
+
+        return f"{image_opening_flag}\n{extracted_text}\n{image_closing_flag}"
+    except Exception as e:
+        print(f"Error processing image on slide {slide_number}, image {image_number}: {e}")
+        return f"<|S{slide_number}I{image_number}|>\nError extracting text\n</|S{slide_number}I{image_number}|>"
+
 
 def extract_title(shape, slide_number, chart_count):
     """Extract chart title and save chart image from the slide"""
     chart_title = ""
     if shape.chart.has_title:
-        chart_title = shape.chart.chart_title.text_frame.text
+        chart_title = shape.chart.chart_title.text
 
     title_opening_flag = f"<|S{slide_number}C{chart_count}|>"
     title_closing_flag = f"</|S{slide_number}C{chart_count}|>"
     return f"{title_opening_flag}\n{chart_title}\n{title_closing_flag}"
 
+
 def get_ppt_data(file_name):
     """Extract text, tables, and images from PPT"""
     prs = Presentation(file_name)
     extracted_text = ""
-    reader = easyocr.Reader(['en'])
+    total_slides = len(prs.slides)
+
+    if total_slides == 0:
+        print("No slides found in the presentation.")
+        return extracted_text
+
+    processed_slides = 0
 
     for slide_number, slide in enumerate(prs.slides, start=1):
         image_count = 0
         chart_count = 0
+
         for shape in slide.shapes:
-            if shape.has_table:
-                table = shape.table
-                for row in table.rows:
-                    row_data = [cell.text for cell in row.cells]
-                    extracted_text += str(row_data) + '\n'
+            try:
+                if shape.has_table:
+                    table = shape.table
+                    for row in table.rows:
+                        row_data = [cell.text for cell in row.cells]
+                        extracted_text += str(row_data) + '\n'
 
-            if hasattr(shape, "text"):
-                text = shape.text.replace('\v', '\n').replace('\x0b', '\n')
-                extracted_text += text + '\n'
+                if hasattr(shape, "text"):
+                    text = shape.text.replace('\v', '\n').replace('\x0b', '\n')
+                    extracted_text += text + '\n'
 
-            if hasattr(shape, "image"):
-                image_count += 1
-                extracted_text += extract_text_from_image(shape, reader, slide_number, image_count) + '\n'
+                if hasattr(shape, "image"):
+                    image_count += 1
+                    extracted_text += extract_text_from_image(shape, slide_number, image_count) + '\n'
 
-            if shape.has_chart:
-                chart_count += 1
-                extracted_text += extract_title(shape, slide_number, chart_count) + '\n'
+                if shape.has_chart:
+                    chart_count += 1
+                    extracted_text += extract_title(shape, slide_number, chart_count) + '\n'
+            except Exception as e:
+                print(f"Error processing shape on slide {slide_number}: {e}")
+
+        # Update progress after processing each slide
+        processed_slides += 1
+        progress = 10 + int((processed_slides / total_slides) * 50)  # First 50% of progress
+        print(f"PROGRESS:{progress}", flush=True)
 
     return extracted_text
+
+# class DoclingPDFLoader(BaseLoader):
+
+#     def __init__(self, file_path: str | list[str]) -> None:
+#         self._file_paths = file_path if isinstance(file_path, list) else [file_path]
+#         self._converter = DocumentConverter()
+
+#     def lazy_load(self) -> Iterator[LCDocument]:
+#         for source in self._file_paths:
+#             dl_doc = self._converter.convert(source).document
+#             text = dl_doc.export_to_markdown()
+#             yield LCDocument(page_content=text)
+
+# def extract_text_from_image(shape, reader, slide_number, image_number):
+#     """Extract text from images in PPT slides"""
+#     image_bytes = shape.image.blob
+#     image_stream = io.BytesIO(image_bytes)
+#     img = Image.open(image_stream)
+
+#     image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
+#     img.save(image_path)
+#     img_np = np.array(img.convert('L'))
+#     result = reader.readtext(img_np, detail=1)
+
+#     rows = []
+#     current_row = []
+#     previous_y = None
+#     tolerance = 15
+
+#     for entry in result:
+#         bbox, text, confidence = entry
+#         x_min, y_min = bbox[0]
+
+#         if previous_y is None or abs(y_min - previous_y) <= tolerance:
+#             current_row.append(text)
+#         else:
+#             rows.append(current_row)
+#             current_row = [text]
+#         previous_y = y_min
+
+#     if current_row:
+#         rows.append(current_row)
+
+#     table_str = ""
+#     for row in rows:
+#         table_str += '\t'.join(row) + '\n'
+
+#     image_opening_flag = f"<|S{slide_number}I{image_number}|>"
+#     image_closing_flag = f"</|S{slide_number}I{image_number}|>"
+#     return f"{image_opening_flag}\n{table_str}\n{image_closing_flag}"
+
+# def extract_title(shape, slide_number, chart_count):
+#     """Extract chart title and save chart image from the slide"""
+#     chart_title = ""
+#     if shape.chart.has_title:
+#         chart_title = shape.chart.chart_title.text_frame.text
+
+#     title_opening_flag = f"<|S{slide_number}C{chart_count}|>"
+#     title_closing_flag = f"</|S{slide_number}C{chart_count}|>"
+#     return f"{title_opening_flag}\n{chart_title}\n{title_closing_flag}"
+
+# def get_ppt_data(file_name):
+#     """Extract text, tables, and images from PPT"""
+#     prs = Presentation(file_name)
+#     extracted_text = ""
+#     reader = easyocr.Reader(['en'])
+#     total_slides = len(prs.slides)
+#     processed_slides = 0
+
+#     # Use DoclingPDFLoader to extract the main textual content
+#     loader = DoclingPDFLoader(file_path=file_name)
+#     docs = loader.load()
+#     extracted_text += docs[0].page_content  # Assuming single document content
+
+#     for slide_number, slide in enumerate(prs.slides, start=1):
+#         image_count = 0
+#         chart_count = 0
+
+#         for shape in slide.shapes:
+#             if hasattr(shape, "image"):
+#                 image_count += 1
+#                 extracted_text += extract_text_from_image(shape, reader, slide_number, image_count) + '\n'
+
+#             if shape.has_chart:
+#                 chart_count += 1
+#                 extracted_text += extract_title(shape, slide_number, chart_count) + '\n'
+
+#         # Update progress after processing each slide
+#         processed_slides += 1
+#         progress = 10 + int((processed_slides / total_slides) * 50)  # First 50% of progress
+#         print(f"PROGRESS:{progress}", flush=True)
+
+#     return extracted_text
+
+
 
 def get_text_chunks_with_flags(content):
     """Chunk text with metadata flags"""
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=config.CHUNK_SIZE, 
-        chunk_overlap=config.CHUNK_OVERLAP
+        chunk_size=CHUNK_SIZE, 
+        chunk_overlap=CHUNK_OVERLAP
     )
     chunks_with_metadata = []
     current_metadata = set()
@@ -167,30 +398,56 @@ def get_text_chunks_with_flags(content):
 
     return chunks_with_metadata
 
-def main():
+if __name__ == "__main__":
     start_time = time.time()
     
-    if len(sys.argv) != 2:
-        print("Usage: python preprocess.py <ppt_file_path>")
+    if len(sys.argv) < 4:
+        print("Error: Too few arguments. Usage: python preprocess.py <ppt_file_path> <ppt_dir> <main_img_dir>")
+        sys.exit(1)
+    elif len(sys.argv) > 4:
+        print("Error: Too many arguments. Usage: python preprocess.py <ppt_file_path> <ppt_dir> <main_img_dir>")
         sys.exit(1)
 
     ppt_file_name = sys.argv[1]
+    PPT_DIR = sys.argv[2]
+    MAIN_IMG_DIR = sys.argv[3]
+
+    FULL_SLIDE_IMG_DIR = os.path.join(MAIN_IMG_DIR, "Full Slide Images")
+    EXTRACTED_IMG_DIR = os.path.join(MAIN_IMG_DIR, "Extracted Images")
+    EXTRACTED_CHART_DIR = os.path.join(MAIN_IMG_DIR, "Extracted Charts")
     
     # Initialize embedding model
-    embeddings = OllamaEmbeddings(model=config.EMBEDDING_MODEL)
+    embeddings = OllamaEmbeddings(model=EMBEDDING_MODEL)
+
+    print("PROGRESS:10", flush=True)
     
     # Extract and process PPT data
     extracted_text = get_ppt_data(ppt_file_name)
+
+    # Update progress to 60% after extracting PPT data
+    print("PROGRESS:60", flush=True)
+
     chunks_with_metadata = get_text_chunks_with_flags(extracted_text)
+
+    # Update progress to 70% after chunking
+    print("PROGRESS:70", flush=True)
     
     # Create FAISS database
     texts = [item['text'] for item in chunks_with_metadata]
     metadatas = [item['metadata'] for item in chunks_with_metadata]
     vector_store = FAISS.from_texts(texts, embeddings, metadatas=metadatas)
-    vector_store.save_local(config.DB_NAME)
-    
-    print(f"FAISS database created and saved as '{config.DB_NAME}'")
-    print(f"Overall Time Taken = {time.time() - start_time:.2f} seconds")
 
-if __name__ == "__main__":
-    main()
+    # Update progress to 90% after creating vector store
+    print("PROGRESS:90", flush=True)
+
+    db_save_path = os.path.join(PPT_DIR, DB_NAME)
+    vector_store.save_local(db_save_path)
+
+    # Update progress to 100% after saving the database
+    print("PROGRESS:100", flush=True)
+
+    #print(f"FAISS database created and saved as '{DB_NAME}' in the directory {PPT_DIR}")
+    #print(f"Overall Time Taken = {time.time() - start_time:.2f} seconds")
+
+    # Print a completion message
+    print("Processing completed successfully.", flush=True)
