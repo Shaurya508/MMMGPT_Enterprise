@@ -1,0 +1,13 @@
+{
+    "ENV_VARS": {
+      "GRPC_VERBOSITY": "ERROR",
+      "GRPC_TRACE": "",
+      "TF_CPP_MIN_LOG_LEVEL": "3"
+    },
+    
+    "EMBEDDING_MODEL": "zxf945/nomic-embed-text:latest",
+    "CHAT_MODEL": "llama3.2:3b",
+    "CHUNK_SIZE": 500,
+    "CHUNK_OVERLAP": 100,
+    "DB_NAME": "PPT_FAISS_INDEX"
+  }
