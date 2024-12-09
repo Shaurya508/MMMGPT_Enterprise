@@ -33,105 +33,88 @@ CHUNK_SIZE = config["CHUNK_SIZE"]
 CHUNK_OVERLAP = config["CHUNK_OVERLAP"]
 DB_NAME = config["DB_NAME"]
 
+# Original code
 
+# # PaddleOCR-based function
+# from paddleocr import PaddleOCR
+# from PIL import Image
 
-# def extract_text_from_image(shape, reader, slide_number, image_number):
-#     """Extract text from images in PPT slides"""
-#     image_bytes = shape.image.blob
-#     image_stream = io.BytesIO(image_bytes)
-#     img = Image.open(image_stream)
+# from pptx import Presentation
+# from paddleocr import PaddleOCR
+# from PIL import Image
+# import io
+# import os
 
-#     image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
-#     img.save(image_path)
-#     img_np = np.array(img.convert('L'))
-#     result = reader.readtext(img_np, detail=1)
+# # Directory to save extracted images
+# EXTRACTED_IMG_DIR = "extracted_images"
+# os.makedirs(EXTRACTED_IMG_DIR, exist_ok=True)
 
-#     rows = []
-#     current_row = []
-#     previous_y = None
-#     tolerance = 15
-
-#     for entry in result:
-#         bbox, text, confidence = entry
-#         x_min, y_min = bbox[0]
-
-#         if previous_y is None or abs(y_min - previous_y) <= tolerance:
-#             current_row.append(text)
-#         else:
-#             rows.append(current_row)
-#             current_row = [text]
-#         previous_y = y_min
-
-#     if current_row:
-#         rows.append(current_row)
-
-#     table_str = ""
-#     for row in rows:
-#         table_str += '\t'.join(row) + '\n'
-
-#     image_opening_flag = f"<|S{slide_number}I{image_number}|>"
-#     image_closing_flag = f"</|S{slide_number}I{image_number}|>"
-#     return f"{image_opening_flag}\n{table_str}\n{image_closing_flag}"
-
-# def extract_text_from_image(shape, model, slide_number, image_number):
+# def ocr_with_paddle(image_path):
 #     """
-#     Extract text from images in PPT slides using a generative model.
+#     Extract text from an image using PaddleOCR.
+
+#     Args:
+#         image_path (str): Path to the image file.
+
+#     Returns:
+#         str: Extracted text from the image.
+#     """
+#     # Initialize PaddleOCR
+#     ocr = PaddleOCR(lang='en', use_angle_cls=True)
+
+#     # Perform OCR on the image
+#     result = ocr.ocr(image_path)
+
+#     # Extract the text from the OCR result
+#     extracted_text = ''
+#     for line in result[0]:
+#         extracted_text += ' ' + line[1][0]
+
+#     return extracted_text.strip()
+
+
+# def extract_text_from_image(shape, slide_number, image_number):
+#     """
+#     Extract text from images in PPT slides using PaddleOCR.
 
 #     Args:
 #         shape: The shape object containing the image in the PPT.
-#         model: The generative model to process the image.
 #         slide_number: The slide number of the image.
 #         image_number: The image number on the slide.
 
 #     Returns:
 #         A formatted string with extracted text wrapped in flags.
 #     """
-#     genai.configure(api_key='AIzaSyDO6Dgc7W_6IJ6SL3ciAWZi7H7b2DXIQxA')
-#     model = genai.GenerativeModel("gemini-1.5-flash")
+#     try:
+#         # Extract image bytes and convert to PIL Image
+#         image_bytes = shape.image.blob
+#         image_stream = io.BytesIO(image_bytes)
+#         img = Image.open(image_stream)
 
-#     # Extract image bytes and save the image
-#     image_bytes = shape.image.blob
-#     image_stream = io.BytesIO(image_bytes)
-#     img = Image.open(image_stream)
+#         # Save the image locally
+#         image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
+#         img.save(image_path)
 
-#     # Save the image locally
-#     image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
-#     img.save(image_path)
+#         # Use PaddleOCR to extract text from the image
+#         extracted_text = ocr_with_paddle(image_path)
 
-#     # Use generative model to extract text from the image
-#     organ = Image.open(image_path)
-#     response = model.generate_content(["Give the data in the image", organ])
+#         # Add flags around the extracted text
+#         image_opening_flag = f"<|S{slide_number}I{image_number}|>"
+#         image_closing_flag = f"</|S{slide_number}I{image_number}|>"
 
-#     # Extract the text from the response
-#     extracted_text = response.text.strip()
-
-#     # Add flags around the extracted text
-#     image_opening_flag = f"<|S{slide_number}I{image_number}|>"
-#     image_closing_flag = f"</|S{slide_number}I{image_number}|>"
-
-#     return f"{image_opening_flag}\n{extracted_text}\n{image_closing_flag}"
-
-# def ocr_with_paddle(img):
-#     finaltext = ''
-#     ocr = PaddleOCR(lang='en', use_angle_cls=True)
-#     # img_path = 'exp.jpeg'
-#     result = ocr.ocr(img)
-    
-#     for i in range(len(result[0])):
-#         text = result[0][i][1][0]
-#         finaltext += ' '+ text
-#     return finaltext
+#         return f"{image_opening_flag}\n{extracted_text}\n{image_closing_flag}"
+#     except Exception as e:
+#         print(f"Error processing image on slide {slide_number}, image {image_number}: {e}")
+#         return f"<|S{slide_number}I{image_number}|>\nError extracting text\n</|S{slide_number}I{image_number}|>"
 
 
-# PaddleOCR-based function
-from paddleocr import PaddleOCR
-from PIL import Image
+# Modified code
 
-from pptx import Presentation
-from paddleocr import PaddleOCR
-from PIL import Image
-import io
 import os
+import io
+import json
+from PIL import Image
+from paddleocr import PaddleOCR
 
 # Directory to save extracted images
 EXTRACTED_IMG_DIR = "extracted_images"
@@ -139,13 +122,13 @@ os.makedirs(EXTRACTED_IMG_DIR, exist_ok=True)
 
 def ocr_with_paddle(image_path):
     """
-    Extract text from an image using PaddleOCR.
+    Extract text and bounding box data from an image using PaddleOCR.
 
     Args:
         image_path (str): Path to the image file.
 
     Returns:
-        str: Extracted text from the image.
+        list: Extracted text lines with bounding box coordinates.
     """
     # Initialize PaddleOCR
     ocr = PaddleOCR(lang='en', use_angle_cls=True)
@@ -153,13 +136,47 @@ def ocr_with_paddle(image_path):
     # Perform OCR on the image
     result = ocr.ocr(image_path)
 
-    # Extract the text from the OCR result
-    extracted_text = ''
-    for line in result[0]:
-        extracted_text += ' ' + line[1][0]
+    # Return structured data (text + bounding boxes)
+    return result[0]
 
-    return extracted_text.strip()
+def parse_table_data(ocr_results):
+    """
+    Parse OCR results to organize text into a table-like structure.
 
+    Args:
+        ocr_results (list): List of OCR results with text and bounding boxes.
+
+    Returns:
+        list: Extracted table rows as a list of dictionaries.
+    """
+    table_data = []
+    for line in ocr_results:
+        # Extract the bounding box and text
+        bbox = line[0]
+        text = line[1][0]
+        
+        # Append to table data
+        table_data.append({"text": text, "bbox": bbox})
+
+    return table_data
+
+def format_table_data(parsed_data):
+    """
+    Convert parsed data into a JSON-like table format.
+
+    Args:
+        parsed_data (list): Parsed OCR data.
+
+    Returns:
+        str: JSON representation of the table.
+    """
+    # Convert to structured JSON format
+    table = []
+    for item in parsed_data:
+        table.append({"text": item["text"], "bbox": item["bbox"]})
+    
+    # Return as JSON string
+    return json.dumps(table, indent=4)
 
 def extract_text_from_image(shape, slide_number, image_number):
     """
@@ -183,17 +200,29 @@ def extract_text_from_image(shape, slide_number, image_number):
         image_path = os.path.join(EXTRACTED_IMG_DIR, f"slide_{slide_number}_image_{image_number}.png")
         img.save(image_path)
 
-        # Use PaddleOCR to extract text from the image
-        extracted_text = ocr_with_paddle(image_path)
+        # Use PaddleOCR to extract text and bounding box data
+        ocr_results = ocr_with_paddle(image_path)
+
+        # Parse and format the extracted data
+        parsed_data = parse_table_data(ocr_results)
+        formatted_text = format_table_data(parsed_data)
 
         # Add flags around the extracted text
         image_opening_flag = f"<|S{slide_number}I{image_number}|>"
         image_closing_flag = f"</|S{slide_number}I{image_number}|>"
 
-        return f"{image_opening_flag}\n{extracted_text}\n{image_closing_flag}"
+        return f"{image_opening_flag}\n{formatted_text}\n{image_closing_flag}"
     except Exception as e:
         print(f"Error processing image on slide {slide_number}, image {image_number}: {e}")
         return f"<|S{slide_number}I{image_number}|>\nError extracting text\n</|S{slide_number}I{image_number}|>"
+
+# # Example: Process the uploaded image
+# image_path = "/mnt/data/image.png"  # Replace with actual path
+# ocr_results = ocr_with_paddle(image_path)
+# parsed_data = parse_table_data(ocr_results)
+# formatted_data = format_table_data(parsed_data)
+
+# print(formatted_data)  # Output as JSON
 
 
 def extract_title(shape, slide_number, chart_count):
