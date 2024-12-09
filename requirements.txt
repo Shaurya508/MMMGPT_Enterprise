@@ -206,7 +206,7 @@ posthog==3.6.6
 prettytable==3.12.0
 prompt_toolkit==3.0.47
 proto-plus==1.24.0
-protobuf==3.20.2
+# protobuf==3.20.2
 prox==0.0.17
 psutil==6.1.0
 pure-eval==0.2.2
